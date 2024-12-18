@@ -40,6 +40,10 @@ else ifeq ($(strip $(MICROKIT_BOARD)), qemu_virt_aarch64)
 	ARCH := aarch64
 	DRIVER_DIR := arm
 	CPU := cortex-a53
+else ifeq ($(strip $(MICROKIT_BOARD)), ls1043a)
+	ARCH := aarch64
+	DRIVER_DIR := ns16550
+	CPU := cortex-a53
 else ifeq ($(strip $(MICROKIT_BOARD)), maaxboard)
 	ARCH := aarch64
 	DRIVER_DIR := imx

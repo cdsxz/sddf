@@ -41,6 +41,7 @@ void notified(microkit_channel ch)
                 sddf_putchar_unbuffered('r');
             } else {
                 sddf_putchar_unbuffered(c);
+                microkit_dbg_putc(c);
             }
             char_count ++;
             if (char_count % 10 == 0) {
