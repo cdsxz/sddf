@@ -25,41 +25,6 @@ serial_queue_handle_t tx_queue_handle;
 
 uintptr_t uart_base;
 
-/*
-    Specific part of the driver
-    
-*/
-static char hexchar(unsigned int v)
-{
-    return v < 10 ? '0' + v : ('a' - 10) + v;
-}
-
-static void puthex8(uint8_t val)
-{
-    char buffer[2 + 3];
-    buffer[0] = '0';
-    buffer[1] = 'x';
-    buffer[2 + 3 - 1] = 0;
-    for (unsigned i = 2 + 1; i > 1; i--) {
-        buffer[i] = hexchar(val & 0xf);
-        val >>= 4;
-    }
-    microkit_dbg_puts(buffer);
-}
-
-static void puthex64(uint64_t val)
-{
-    char buffer[16 + 3];
-    buffer[0] = '0';
-    buffer[1] = 'x';
-    buffer[16 + 3 - 1] = 0;
-    for (unsigned i = 16 + 1; i > 1; i--) {
-        buffer[i] = hexchar(val & 0xf);
-        val >>= 4;
-    }
-    microkit_dbg_puts(buffer);
-}
-
 static bool can_tx_send() 
 {
     return (*UART_1_REG(uart_base, LSR) & LSR_THRE);
