@@ -22,6 +22,7 @@ Currently the options for `MICROKIT_BOARD` are:
 * imx8mm_evk
 * maaxboard
 * qemu_virt_aarch64
+* ls1043a
 
 After building, the system image to load will be `build/loader.img`.
 

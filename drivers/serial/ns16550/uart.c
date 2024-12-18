@@ -29,130 +29,6 @@ uintptr_t uart_base;
     Specific part of the driver
     
 */
-static bool can_tx_send() 
-{
-    /*there is room in the Transmiter Holding Register*/
-    return !(*UART_1_REG(uart_base, LSR) & LSR_THRE);
-}
-
-static bool is_tx_full() 
-{
-    /*there is room in the Transmiter Holding Register*/
-    if (*UART_1_REG(uart_base, LSR) & LSR_RFE)
-    {
-        return *UART_1_REG(uart_base, LSR) & LSR_OE;
-    }
-    return false;
-}
-
-static void enable_tx_interrupt()
-{
-    *UART_1_REG(uart_base, IER) |= IER_ETHREI;
-}
-
-static void disable_tx_interrupt()
-{
-    *UART_1_REG(uart_base, IER) &= ~IER_ETHREI;
-}
-
-static void send(char ch)
-{  
-    if (ch == '\n' ) 
-    {
-        *UART_1_REG(uart_base, THR) = '\r';
-    }
-    *UART_1_REG(uart_base, THR) = ch;
-}
-
-
-static bool is_data_ready()
-{
-    return *UART_1_REG(uart_base, LSR) & LSR_DR;
-}
-
-static char read()
-{
-    return *UART_1_REG(uart_base, RBR) & RBR_MASK;
-}
-
-static void enable_rx_interrupt()
-{
-    *UART_1_REG(uart_base, IER) |= IER_ERDAI;
-}
-
-static void disable_rx_interrupt()
-{
-    *UART_1_REG(uart_base, IER) &= ~IER_ERDAI;
-}
-
-/*
-    Generic interface : 
-
-*/
-static void tx_provide(void)
-{
-    bool reprocess = true;
-    bool transferred = false;
-    while (reprocess) {
-        char c;
-        while ((*UART_1_REG(uart_base, LSR) & LSR_THRE) && !serial_dequeue(&tx_queue_handle, &tx_queue_handle.queue->head, &c)) {
-            send(c);
-            transferred = true;
-        }
-
-        serial_request_producer_signal(&tx_queue_handle);
-        if ( (*UART_1_REG(uart_base, LSR) & LSR_THRE) && !serial_queue_empty(&tx_queue_handle, tx_queue_handle.queue->head)) {
-            enable_tx_interrupt();
-        } else {
-            disable_tx_interrupt();
-        }
-        reprocess = false;
-
-        if ((*UART_1_REG(uart_base, LSR) & LSR_THRE) && !serial_queue_empty(&tx_queue_handle, tx_queue_handle.queue->head)) {
-            serial_cancel_producer_signal(&tx_queue_handle);
-            disable_tx_interrupt();
-            reprocess = true;
-        }
-    }
-
-    if (transferred && serial_require_consumer_signal(&tx_queue_handle)) {
-        serial_cancel_consumer_signal(&tx_queue_handle);
-        microkit_notify(TX_CH);
-    }
-}
-
-static void rx_return(void)
-{
-    bool reprocess = true;
-    bool enqueued = false;
-    while (reprocess) {
-        while (is_data_ready() && !serial_queue_full(&rx_queue_handle, rx_queue_handle.queue->tail)) {
-            char c = read();
-            serial_enqueue(&rx_queue_handle, &rx_queue_handle.queue->tail, c);
-            enqueued = true;
-        }
-
-        if (is_data_ready() && serial_queue_full(&rx_queue_handle, rx_queue_handle.queue->tail)) {
-            /* Disable rx interrupts until virtualisers queue is no longer empty. */
-            disable_rx_interrupt();
-            serial_request_consumer_signal(&rx_queue_handle);
-        }
-        reprocess = false;
-
-        if (is_data_ready() && !serial_queue_full(&rx_queue_handle, rx_queue_handle.queue->tail)) {
-            serial_cancel_consumer_signal(&rx_queue_handle);
-            enable_rx_interrupt();
-            reprocess = true;
-        }
-    }
-
-    if (enqueued && serial_require_producer_signal(&rx_queue_handle)) {
-        serial_cancel_producer_signal(&rx_queue_handle);
-        microkit_notify(RX_CH);
-    }
-}
-
-
 static char hexchar(unsigned int v)
 {
     return v < 10 ? '0' + v : ('a' - 10) + v;
@@ -184,36 +60,159 @@ static void puthex64(uint64_t val)
     microkit_dbg_puts(buffer);
 }
 
+static bool can_tx_send() 
+{
+    return (*UART_1_REG(uart_base, LSR) & LSR_THRE);
+}
+
+static bool is_tx_full() 
+{
+    if (*UART_1_REG(uart_base, LSR) & LSR_RFE)
+    {
+        return *UART_1_REG(uart_base, LSR) & LSR_OE;
+    }
+    return false;
+}
+
+static void enable_tx_interrupt()
+{
+    *UART_1_REG(uart_base, IER) |= IER_ETHREI;
+}
+
+static void disable_tx_interrupt()
+{
+    *UART_1_REG(uart_base, IER) &= ~IER_ETHREI;
+}
+
+static void send(char ch)
+{  
+    while(!can_tx_send());
+    if (ch == '\n' ) 
+    {
+        *UART_1_REG(uart_base, THR) = '\r';
+    }
+    *UART_1_REG(uart_base, THR) = ch;
+}
+
+
+static bool is_data_ready()
+{
+    return !(*UART_1_REG(uart_base, DSR) & DSR_RXRDY);
+}
+
+static char read()
+{
+    return *UART_1_REG(uart_base, RBR) & RBR_MASK;
+}
+
+static void enable_rx_interrupt()
+{
+    *UART_1_REG(uart_base, IER) |= IER_ERDAI;
+}
+
+static void disable_rx_interrupt()
+{
+    *UART_1_REG(uart_base, IER) &= ~IER_ERDAI;
+}
+
+static bool is_tx_fifo_full() 
+{
+    return (*UART_1_REG(uart_base, DSR) & DSR_TXRDY);
+}
+
+static void tx_provide(bool is_irq)
+{
+    bool reprocess = true;
+    bool transferred = false;
+    while (reprocess) {
+        char c;
+        while ((!is_irq || !is_tx_fifo_full()) && !serial_dequeue(&tx_queue_handle, &tx_queue_handle.queue->head, &c)) {
+            send(c);
+            transferred = true;
+        }
+
+        serial_request_producer_signal(&tx_queue_handle);
+        if (is_tx_fifo_full() && !serial_queue_empty(&tx_queue_handle, tx_queue_handle.queue->head)) {
+            enable_tx_interrupt();
+        } else {
+            disable_tx_interrupt();
+        }
+        reprocess = false;
+
+        if (!is_tx_fifo_full() && !serial_queue_empty(&tx_queue_handle, tx_queue_handle.queue->head)) {
+            serial_cancel_producer_signal(&tx_queue_handle);
+            disable_tx_interrupt();
+            reprocess = true;
+        }
+    }
+
+    if (transferred && serial_require_consumer_signal(&tx_queue_handle)) {
+        serial_cancel_consumer_signal(&tx_queue_handle);
+        microkit_notify(TX_CH);
+    }
+}
+
+static void rx_return(bool is_irq)
+{
+    bool reprocess = true;
+    bool enqueued = false;
+    while (reprocess) {
+        while (is_data_ready() && !serial_queue_full(&rx_queue_handle, rx_queue_handle.queue->tail)) {
+            char c = read();
+            serial_enqueue(&rx_queue_handle, &rx_queue_handle.queue->tail, c);
+            enqueued = true;
+        }
+
+        if (is_data_ready() && serial_queue_full(&rx_queue_handle, rx_queue_handle.queue->tail)) {
+            /* Disable rx interrupts until virtualisers queue is no longer empty. */
+            disable_rx_interrupt();
+            serial_request_consumer_signal(&rx_queue_handle);
+        }
+        reprocess = false;
+
+        if (is_data_ready() && !serial_queue_full(&rx_queue_handle, rx_queue_handle.queue->tail)) {
+            serial_cancel_consumer_signal(&rx_queue_handle);
+            enable_rx_interrupt();
+            reprocess = true;
+        }
+    }
+
+    if (enqueued && serial_require_producer_signal(&rx_queue_handle)) {
+        serial_cancel_producer_signal(&rx_queue_handle);
+        microkit_notify(RX_CH);
+    }
+}
+
 static void handle_irq(void)
 {
     while (((*UART_1_REG(uart_base, IIR) & IIR_MASK_DA) == IIR_MASK_DA) || 
             ((*UART_1_REG(uart_base, IIR) & IIR_MASK_CTO) == IIR_MASK_CTO) ||
             ((*UART_1_REG(uart_base, IIR) & IIR_MASK_UTHRE) == IIR_MASK_UTHRE)) {
-                
-            if (((*UART_1_REG(uart_base, IIR) & IIR_MASK_DA) == IIR_MASK_DA) ||
-                ((*UART_1_REG(uart_base, IIR) & IIR_MASK_CTO) == IIR_MASK_CTO)) {
-                rx_return();
-            }
             
-            if ((*UART_1_REG(uart_base, IIR) & IIR_MASK_UTHRE) == IIR_MASK_UTHRE) {
-                tx_provide();
-            }
+        if (((*UART_1_REG(uart_base, IIR) & IIR_MASK_DA) == IIR_MASK_DA) ||
+            ((*UART_1_REG(uart_base, IIR) & IIR_MASK_CTO) == IIR_MASK_CTO)) {
+            rx_return(true);
+        }
+        
+        if ((*UART_1_REG(uart_base, IIR) & IIR_MASK_UTHRE) == IIR_MASK_UTHRE) {
+            tx_provide(true);
+        }
     }
 }
 
 static void uart_setup(void)
 {
     //TODO: initialised from u-boot
-    /*
-    while (!(*UART_1_REG(uart_base, LSR) & LSR_TEMT));
+
+    //*UART_1_REG(uart_base, FCR) &= ~FCR_FEN;
+    *UART_1_REG(uart_base, FCR) |= FCR_FEN;
+    //*UART_1_REG(uart_base, FCR) |= BIT(7) | BIT(6);
+    *UART_1_REG(uart_base, FCR) |= FCR_RFR;
+    *UART_1_REG(uart_base, FCR) |= FCR_TFR;
+
     
-    *UART_1_REG(uart_base, IER) = 0x00;
-    *UART_1_REG(uart_base, MCR) = 0x02;
-    *UART_1_REG(uart_base, FCR) = BIT(0);
-    *UART_1_REG(uart_base, LCR) = 0x03;
-    */
-    *UART_1_REG(uart_base, IER) |= IER_ERDAI;
-   //disable_tx_interrupt();
+    enable_rx_interrupt();
+    enable_tx_interrupt();
 }
 
 void init(void)
@@ -233,20 +232,11 @@ void notified(microkit_channel ch)
         microkit_deferred_irq_ack(ch);
         break;
     case TX_CH:
-        tx_provide();
+        tx_provide(false);
         break;
     case RX_CH:
         enable_rx_interrupt();
-        rx_return();
-        /*
-        if (is_data_ready() ) {
-            send('1');
-            char c = read();
-            send('2');
-            while(!(*UART_1_REG(uart_base, LSR) & LSR_THRE));
-            send(c);
-        }
-        */
+        rx_return(false);
         break;
     default:
         sddf_dprintf("UART|LOG: received notification on unexpected channel: %u\n", ch);

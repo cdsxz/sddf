@@ -30,12 +30,25 @@
 #define IER_ERDAI  BIT(0) /* Enable received data available interrupt */
 
 #define FCR        0x2 /* FIFO control register */
+#define FCR_MASK_S  5
+#define FCR_MASK_1  0b00 
+#define FCR_MASK_4  0b01 
+#define FCR_MASK_8  0b10 
+#define FCR_MASK_14 0b11 
+
+#define FCR_TFR    BIT(2) /* Transmitter FIFO reset */
+#define FCR_RFR    BIT(1) /* Receiver FIFO reset */
+#define FCR_FEN    BIT(0) /* FIFO enable */
+
+
+
 #define IIR        0x2 /* interrupt ID register */
 #define IIR_MASK_RLS    0b00000110 /* receiver line status */
 #define IIR_MASK_DA     0b00000100 /* data available */
 #define IIR_MASK_CTO    0b00001100 /* character timeout */
 #define IIR_MASK_UTHRE  0b00000010 /* UTHR empty */
 #define IIR_MASK_MS     0b00000000 /* Modem status */
+#define IIR_MASK_IDLE   0b00000001 /* Idle */
 
 #define LCR        0x3 /* line control register */
 
@@ -52,6 +65,10 @@
 #define LSR_DR     BIT(0) /* Data ready */
 
 #define MSR        0x6 /* modem status register */
+
+#define DSR        0x10 /* DMA status register */
+#define DSR_TXRDY  BIT(1) /* Transmitter ready */
+#define DSR_RXRDY  BIT(0) /* Receiver ready */
 
 #define UART_1_REG(mmio, x) ((volatile uint8_t *)((mmio) + OFFSET_DUART_1 + (x)))
 #define UART_2_REG(mmio, x) ((volatile uint8_t *)((mmio) + OFFSET_DUART_2 + (x)))
