@@ -31,10 +31,10 @@
 
 #define FCR        0x2 /* FIFO control register */
 #define IIR        0x2 /* interrupt ID register */
-#define IIR_MASK_RLS    0b01100000 /* receiver line status */
-#define IIR_MASK_DA     0b01000000 /* data available */
-#define IIR_MASK_CTO    0b11000000 /* character timeout */
-#define IIR_MASK_UTHRE  0b00100000 /* UTHR empty */
+#define IIR_MASK_RLS    0b00000110 /* receiver line status */
+#define IIR_MASK_DA     0b00000100 /* data available */
+#define IIR_MASK_CTO    0b00001100 /* character timeout */
+#define IIR_MASK_UTHRE  0b00000010 /* UTHR empty */
 #define IIR_MASK_MS     0b00000000 /* Modem status */
 
 #define LCR        0x3 /* line control register */

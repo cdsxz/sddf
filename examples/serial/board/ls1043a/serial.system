@@ -32,7 +32,7 @@
         <map mr="rx_data_driver" vaddr="0x4_002_000" perms="rw" cached="true" setvar_vaddr="rx_data" />
         <map mr="tx_data_driver" vaddr="0x4_004_000" perms="rw" cached="true" setvar_vaddr="tx_data" />
 
-        <irq irq="86" id="0" trigger="edge" /> <!-- UART interrupt -->
+        <irq irq="86" id="0" trigger="level" /> <!-- UART interrupt -->
     </protection_domain>
 
     <protection_domain name="client0" priority="97">

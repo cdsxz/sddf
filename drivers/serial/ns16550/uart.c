@@ -91,7 +91,6 @@ static void disable_rx_interrupt()
 */
 static void tx_provide(void)
 {
-    //microkit_dbg_puts("UART DRIVER|LOG: TX\n");
     bool reprocess = true;
     bool transferred = false;
     while (reprocess) {
@@ -129,15 +128,11 @@ static void rx_return(void)
     while (reprocess) {
         while (is_data_ready() && !serial_queue_full(&rx_queue_handle, rx_queue_handle.queue->tail)) {
             char c = read();
-            microkit_dbg_puts("UART DRIVER|OUT: received ");
-            microkit_dbg_puts(&c);
-            microkit_dbg_puts("\n");
             serial_enqueue(&rx_queue_handle, &rx_queue_handle.queue->tail, c);
             enqueued = true;
         }
 
         if (is_data_ready() && serial_queue_full(&rx_queue_handle, rx_queue_handle.queue->tail)) {
-            //microkit_dbg_puts("UART DRIVER|OUT: received signaled consumer!\n");
             /* Disable rx interrupts until virtualisers queue is no longer empty. */
             disable_rx_interrupt();
             serial_request_consumer_signal(&rx_queue_handle);
@@ -145,7 +140,6 @@ static void rx_return(void)
         reprocess = false;
 
         if (is_data_ready() && !serial_queue_full(&rx_queue_handle, rx_queue_handle.queue->tail)) {
-            //microkit_dbg_puts("UART DRIVER|OUT: received signal canceled consumer !\n");
             serial_cancel_consumer_signal(&rx_queue_handle);
             enable_rx_interrupt();
             reprocess = true;
@@ -153,7 +147,6 @@ static void rx_return(void)
     }
 
     if (enqueued && serial_require_producer_signal(&rx_queue_handle)) {
-        //microkit_dbg_puts("UART DRIVER|OUT: received signal canceled producer!\n");
         serial_cancel_producer_signal(&rx_queue_handle);
         microkit_notify(RX_CH);
     }
@@ -193,9 +186,6 @@ static void puthex64(uint64_t val)
 
 static void handle_irq(void)
 {
-    microkit_dbg_puts("UART DRIVER|LOG: handle IRQ \n");
-    //hexchar(*UART_1_REG(uart_base, IIR));
-    //microkit_dbg_puts("\n");
     while (((*UART_1_REG(uart_base, IIR) & IIR_MASK_DA) == IIR_MASK_DA) || 
             ((*UART_1_REG(uart_base, IIR) & IIR_MASK_CTO) == IIR_MASK_CTO) ||
             ((*UART_1_REG(uart_base, IIR) & IIR_MASK_UTHRE) == IIR_MASK_UTHRE)) {
@@ -228,32 +218,25 @@ static void uart_setup(void)
 
 void init(void)
 {
-    //microkit_dbg_puts("UART DRIVER|LOG: start\n");
     uart_setup();
 
     serial_queue_init(&rx_queue_handle, rx_queue, SERIAL_RX_DATA_REGION_CAPACITY_DRIV, rx_data);
 
     serial_queue_init(&tx_queue_handle, tx_queue, SERIAL_TX_DATA_REGION_CAPACITY_DRIV, tx_data);
-    //microkit_dbg_puts("UART DRIVER|LOG: end\n");
 }
 
 void notified(microkit_channel ch)
 {
     switch (ch) {
     case IRQ_CH:
-        send('I');
         handle_irq();
         microkit_deferred_irq_ack(ch);
         break;
     case TX_CH:
-        send('T');
         tx_provide();
         break;
     case RX_CH:
-        send('R');
         enable_rx_interrupt();
-        //uart_regs->imsc |= (PL011_IMSC_RX_TIMEOUT | PL011_IMSC_RX_INT);
-
         rx_return();
         /*
         if (is_data_ready() ) {
