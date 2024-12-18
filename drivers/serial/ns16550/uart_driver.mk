@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 # Include this snippet in your project Makefile to build
-#    the PL011 UART driver
+#    the ns16550 UART driver
 # Requires uart_base to be set to the mapped address of the UART
 #    registers in the system description file
 
